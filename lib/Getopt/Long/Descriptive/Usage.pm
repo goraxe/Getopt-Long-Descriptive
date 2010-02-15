@@ -106,6 +106,52 @@ sub option_text {
   return $string;
 }
 
+=head2 pod
+
+This returns the usage formated as a pod document
+
+=cut
+
+sub pod {
+  my ($self) = @_;
+  return join qq{\n}, $self->pod_leader_text, $self->pod_option_text;
+}
+
+sub pod_leader_text {
+  my ($self) = @_;
+
+  return qq{=head1 NAME\n\n}.Getopt::Long::Descriptive::prog_name().qq{\n\n}.
+         qq{=head1 SYNOPSIS\n\n}.$self->leader_text().qq{\n\n};
+
+}
+
+
+sub pod_option_text {
+  my ($self) = @_;
+  my @options = @{ $self->{options} || [] };
+  my $string = q{};
+  return $string unless @options;
+
+  $string .= "=head1 OPTIONS\n\n=over\n\n";
+
+  foreach my $opt (@options) {
+    my $spec = $opt->{spec};
+    my $desc = $opt->{desc};
+    if ($desc eq 'spacer') {
+        $string .= "=back\n\n=head2 $spec\n\n=cut\n\n=over\n\n";
+        next;
+    }
+
+    $spec = Getopt::Long::Descriptive->_strip_assignment($spec);
+    $string .= "=item " . join " or ", map { length > 1 ? "B<--$_>" : "B<-$_>" }
+                             split /\|/, $spec; 
+    $string .= "\n\n$desc\n\n=cut\n\n";
+
+  }
+  $string .= "=back\n\n";
+  return $string;
+}
+
 =head2 warn
 
 This warns with the usage message.
@@ -172,3 +218,4 @@ under the same terms as Perl itself.
 =cut
 
 1;
+# vim: et ts=2
