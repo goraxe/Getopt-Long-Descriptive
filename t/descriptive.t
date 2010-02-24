@@ -2,9 +2,13 @@
 use strict;
 use warnings;
 
-use Test::More tests => 37;
+use Test::More tests => 49;
 
 use_ok("Getopt::Long::Descriptive");
+
+use Clone qw(clone);
+
+use Data::Dumper;
 
 # test constraints:
 # (look at P::V for names, too)
@@ -43,7 +47,8 @@ sub is_opt {
 }
 
 sub is_hidden {
-  my ($specs, $cmd, $text) = @_;
+  my ($specs, $cmd, $text, $opts) = @_;
+  my $specs_copy = clone ($specs);
   eval {
     local @ARGV;
     my ($opt, $usage) = describe_options(
@@ -60,6 +65,12 @@ sub is_hidden {
       $text,
       "hidden option description",
     );
+    warn "specs_copy: " .Dumper $specs_copy;
+    foreach my $args (@$opts) {
+        $specs = clone ($specs_copy);
+        warn Dumper $specs;
+        is_opt ( $args->{argv}, $specs, $args->{expect}, $args->{desc} );
+    }
   };
   if ($@) {
     chomp($@);
@@ -81,9 +92,37 @@ is_hidden(
   [
     [ "foo|f", "a foo option" ],
     [ "bar|b", "a bar option", { hidden => 1 } ],
+    [ "baz|B", "a baz option", { hidden => 1, implies => { 'foo' => 1 }  } ],
   ],
   qr/test \[-f\] \[long options\.\.\.\]/i,
   qr/a bar option/,
+  [ 
+    { argv => [ "--foo" ], expect => { foo => 1 }, desc => 'non hidden option foo set' } ,
+    { argv => [ "--bar" ], expect => { bar => 1 },  desc => 'hidden option bar set' },
+    { argv => [ "--foo", "--bar" ], expect => { foo => 1, bar => 1 } , desc => 'hidden (bar) and non-hidden (foo) options set' },
+    { argv => [ "--baz" ], expect => { foo => 1, baz => 1 } , desc => 'hidden (baz)  and non-hidden (foo) options set via implication' },
+  ]
+);
+
+### hidden and one_of
+
+is_hidden(
+  [
+    [ 'mode' => 'hidden' => { one_of => [
+        [ "foo|f", "a foo option" ],
+        [ "bar|b", "a bar option", { hidden => 1 } ],
+      ]},
+    ],
+    [ "baz|B", "a baz option", { hidden => 1, implies => {  mode => 'foo' } } ],
+  ],
+  qr/test \[-f\] \[long options\.\.\.\]/i,
+  qr/a bar option/,
+  [ 
+    { argv => [ "--foo" ], expect => { mode => 'foo' }, desc => 'non hidden option set' } ,
+    { argv => [ "--bar" ], expect => { mode => 'bar' },  desc => 'hidden option set' },
+    { argv => [ "--foo", "--bar" ], expect => { mode => { foo => 1, bar => 1 } } , desc => 'hidden and non-hidden options set' },
+    { argv => [ "--baz" ], expect => { mode => { foo => 1, baz => 1 } } , desc => 'hidden and non-hidden options set via implication' },
+  ]
 );
 
 ### tests for one_of
